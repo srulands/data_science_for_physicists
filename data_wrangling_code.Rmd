@@ -1,0 +1,68 @@
+---
+title: "Data science for physicists"
+output: html_notebook
+---
+
+
+```{r}
+library(magrittr)
+library(data.table)
+```
+
+# Loading and writing data
+
+```{r}
+flights <- fread("nycflights13/flights.txt") # Flights that departed from NYC in 2013
+weather <- fread("nycflights13/weather.txt") # Weather at each NYC airport for each hour
+airports <- fread("nycflights13/airports.txt") # Information on each airport
+airlines <- fread("nycflights13/airlines.txt") # Full carrier name from abbreviation
+planes <- fread("nycflights13/planes.txt") # Information on each plane
+
+flights <- flights[!is.na(dep_delay)]
+```
+
+# Merging data
+
+```{r}
+flights.weather <- merge(flights, weather)
+flights.planes <- merge(flights, planes, by = "tailnum")
+flights.airports <- merge(flights, airports, by.x = "origin", by.y="faa", all=F)
+```
+
+# Subsetting data
+
+```{r}
+planes[engines == 4]
+planes[, .(tailnum, year)]
+```
+
+# Add a new column to data
+
+```{r}
+flights[ , speed_kmh := 60*distance/air_time*1.61 ]
+flights[ , resc.distance := distance/mean(distance), by = carrier ]
+```
+
+# Grouping and aggregating data
+```{r}
+flights[ , .(mean_delay = mean(dep_delay, na.rm=T)), by=carrier]
+flights[ time_hour>20, .(mean_delay = mean(dep_delay, na.rm=T)), by=.(month,origin)]
+
+flights.planes[, .(mean_delay = mean(dep_delay, na.rm = T),
+                   sderr = sd(dep_delay)/sqrt(.N)), by= manufacturer]
+
+flights.weather[, .(mean_delay = mean(dep_delay)), by = wind_speed > 30]
+```
+
+
+# Chaining
+```{r}
+merge(flights, weather) %>%
+  merge(planes, by="tailnum") %>%
+  merge(airports, by.x = "origin", by.y = "faa") %>%
+  merge(airlines, by="carrier") %>%
+  .[, speed_kmh := 60*distance/air_time*1.61 ] %>%
+  .[, resc.speed := speed_kmh/mean(speed_kmh,na.rm=T), by=.(model,carrier)] %>%
+  .[, .(r.speed = cor.test(temp, resc.speed, method="spearman")$estimate,
+        diff.speed = mean(speed_kmh[dep_delay>20], na.rm=T) - mean(speed_kmh[dep_delay <=0],na.rm=T)), by=carrier]
+```
