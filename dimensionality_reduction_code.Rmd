@@ -1,0 +1,177 @@
+---
+title: "Data science for physicists"
+output: html_notebook
+---
+
+Install neccesary packeges
+
+```{r}
+# install.packages(c("magrittr", "data.table", "ggplot2", 
+#                    "GGally", "ggfortigy", "plotly",
+#                    "umap", "devtools"))
+# devtools::install_github("jlmelville/coil20")
+```
+
+
+```{r}
+library(coil20) # COIL-20 dataset
+library(magrittr) 
+library(data.table)
+library(ggplot2)
+library(GGally) # pairwise plots
+library(ggfortify) # plotting PCA results
+library(plotly) # plotting in 3D
+library(umap) # UMAP dimensionality reduction
+```
+
+# Principal Component Analysis
+
+## Iris data
+
+```{r}
+data("iris")
+head(iris)
+```
+
+```{r}
+ggpairs(iris, columns = 1:4, aes(color = Species))
+```
+
+Perform principal component analysis
+
+```{r}
+iris.pca <- prcomp(iris[, 1:4], scale = T) # perform PCA
+```
+```{r}
+head(iris[, 1:4])
+```
+
+Loadings / Rotation
+
+```{r}
+print(iris.pca)
+```
+
+Scores / transformed data
+
+```{r}
+head(iris.pca$x)
+```
+
+Explained variance
+
+```{r}
+summary(iris.pca)
+```
+
+```{r}
+autoplot(iris.pca, data = iris, colour = "Species")
+```
+
+```{r}
+screeplot(iris.pca)
+```
+
+## COIL-20 data
+
+Download the COIL-20 data and save to disk (takes a long time, only run this once)
+
+```{r}
+# coil20 <- download_coil20(verbose = TRUE)
+# saveRDS(coil20, file = "./coil20.rds")
+```
+
+Read the COIL-20 from disk into a data.frame
+
+```{r}
+coil20 <- readRDS(file = "./coil20.rds")
+```
+
+Show example images
+
+```{r}
+show_object(coil20, object = 4, pose = 1)
+show_object(coil20, object = 4, pose = 10)
+show_object(coil20, object = 7, pose = 1)
+show_object(coil20, object = 7, pose = 10)
+show_object(coil20, object = 10, pose = 1)
+```
+```{r}
+coil20.pca <- prcomp(coil20[, 1:128^2])
+```
+
+```{r}
+autoplot(coil20.pca, data = coil20, colour = "Label")
+```
+
+```{r}
+screeplot(coil20.pca, npcs = 20)
+```
+
+## Swiss Roll
+
+```{r}
+n <- 1000
+set.seed(42)
+xy <- data.table(x = runif(n, max=10), y = runif(n, max=10)) %>% 
+  .[(x < 3 | x > 7) | ((y < 3 | y > 7)), ]
+ggplot(xy, aes(x=x, y=y, color=x)) + geom_point() + scale_colour_viridis_c()
+```
+```{r}
+swiss.roll <- data.table(x = xy[, x] * cos(xy[, x]), y = xy[, x] * sin(xy[, x]), z = xy[, y], color=xy[, x])
+```
+
+
+```{r}
+# ggplot(swiss.roll, aes(x=x, y=y, color=color)) + geom_point()
+plot_ly(swiss.roll, x = ~x, y = ~y, z = ~z, color = ~color) %>%  add_markers(size=1)
+```
+
+```{r}
+swiss.roll.pca <- prcomp(swiss.roll[, 1:3])
+```
+```{r}
+as.data.table(swiss.roll.pca$x) %>% .[, color := swiss.roll[, color]] %>%
+  plot_ly(x = ~PC1, y = ~PC2, z = ~PC3, color = ~color) %>%  add_markers(size=1)
+```
+
+# UMAP
+
+## Swiss roll
+
+```{r}
+swiss.roll.umap <- umap(swiss.roll, n_neighbors = 50, min_dist=0.9)
+swiss.roll.umap.layout <- data.table(UMAP1 = swiss.roll.umap$layout[, 1], 
+                                     UMAP2 = swiss.roll.umap$layout[, 2], 
+                                     color = swiss.roll[, color])
+ggplot(swiss.roll.umap.layout, aes(x = UMAP1, y = UMAP2, color=color)) + 
+  geom_point() + scale_colour_viridis_c()
+```
+
+## COIL-20 data
+
+```{r}
+coil20.umap <- umap(coil20[, 1:128 ^ 2])
+```
+
+```{r}
+coil20.umap.layout <- data.table(UMAP1 = coil20.umap$layout[, 1], UMAP2 = coil20.umap$layout[, 2], Label = coil20[, "Label"])
+```
+
+```{r}
+ggplot(coil20.umap.layout, aes(x = UMAP1, y = UMAP2, color = Label)) + geom_point()
+```
+
+
+# Chaining dimensionality reductions
+
+```{r}
+coil20.pca.umap <- coil20.pca$x[, 1:10] %>% umap(n_neighbors = 15, min_dist = 0.9)
+
+coil20.umap.pca.layout <- data.table(UMAP1 = coil20.pca.umap$layout[, 1], UMAP2 = coil20.pca.umap$layout[, 2], Label = coil20[, "Label"])
+
+ggplot(coil20.umap.pca.layout, aes(x = UMAP1, y = UMAP2, color = Label)) + geom_point()
+```
+```{r}
+sessionInfo()
+```

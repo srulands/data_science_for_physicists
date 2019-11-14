@@ -1,0 +1,84 @@
+---
+title: "Data science for physicists"
+output: html_notebook
+---
+
+Install neccesary packeges
+
+```{r}
+# install.packages(c("magrittr", "data.table", "ggplot2", 
+#                    "dbscan", "igraph", "NetworkToolbox"))
+```
+
+Load modules
+
+```{r}
+library(magrittr) 
+library(data.table)
+library(ggplot2)
+library(dbscan) # for finding kNNs
+library(igraph) # to construct the knn graph
+library(NetworkToolbox) # provides louvain
+```
+
+# Loading and writing data
+
+```{r}
+data("iris")
+print(iris[1:4, ])
+```
+
+```{r}
+ggplot(iris, aes(x=Petal.Length, y=Petal.Width, colour = Species)) +
+  geom_point()
+```
+
+## Connectivity-based / hierarchical clustering
+
+```{r}
+clusters <- iris[1:4] %>% dist(., method = "euclidean") %>% hclust(., method = "complete")
+plot(clusters)
+```
+```{r}
+iris$H.cluster <- cutree(clusters, 3) %>% factor()
+ggplot(iris, aes(x=Petal.Length, y=Petal.Width, colour = Species, shape = H.cluster)) +
+  geom_point()
+```
+
+```{r}
+table(iris$Species, iris$H.cluster)
+```
+
+## Centroid-based clustering (k-means)
+
+```{r}
+set.seed(42)
+iris$K.cluster <- kmeans(iris[1:4], 3, nstart = 20)$cluster %>% factor()
+ggplot(iris, aes(x=Petal.Length, y=Petal.Width, colour = Species, shape = K.cluster)) +
+  geom_point()
+```
+
+```{r}
+table(iris$Species, iris$K.cluster)
+```
+
+## Graph-based clustering
+
+```{r}
+adjacency.matrix <- iris[1:4] %>% dist(method = "euclidean") %>% kNN(3) %>%
+  adjacencylist() %>% graph_from_adj_list() %>%
+  as.undirected() %>% as_adjacency_matrix() %>% as.matrix()
+
+iris$L.cluster <- louvain(adjacency.matrix, 0.1)$community %>% factor()
+```
+
+```{r}
+ggplot(iris, aes(x=Petal.Length, y=Petal.Width, colour = Species, shape = L.cluster)) +
+  geom_point()
+```
+```{r}
+table(iris$Species, iris$L.cluster)
+```
+```{r}
+sessionInfo()
+```
